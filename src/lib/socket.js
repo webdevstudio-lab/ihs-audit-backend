@@ -43,3 +43,7 @@ export function emitSiteUpdated(site) {
 export function emitTechnicianActive(technician) {
   broadcast("technician:active", technician);
 }
+
+export function emitNotification(notification) {
+  broadcast("notification:new", notification);
+}

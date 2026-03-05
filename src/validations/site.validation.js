@@ -5,23 +5,22 @@ import {
   KEY_LOCATION,
   CONTACT_TYPE,
   CLIENTS,
+  SITE_TYPOLOGY,
+  SITE_CONFIGURATION,
+  SITE_TYPE,
+  SITE_PRIORITY,
 } from "../config/constants.js";
 
-// Schema contact sur site
 const contactSchema = z.object({
   type: z.enum(Object.values(CONTACT_TYPE)).optional(),
-
   name: z.string().trim().optional(),
-
   phone: z.string().trim().optional(),
-
   phone2: z.string().trim().optional(),
-
   notes: z.string().trim().optional(),
 });
 
-// Creation d'un site
 export const createSiteSchema = z.object({
+  // Identité
   code: z
     .string({ required_error: "Code site obligatoire" })
     .toUpperCase()
@@ -33,6 +32,7 @@ export const createSiteSchema = z.object({
     .trim()
     .min(2, "Nom trop court"),
 
+  // Localisation
   city: z.string({ required_error: "Ville obligatoire" }).trim(),
 
   region: z.string().trim().optional(),
@@ -52,13 +52,54 @@ export const createSiteSchema = z.object({
 
   address: z.string().trim().optional(),
 
+  // Clients
   clients: z.array(z.enum(CLIENTS)).min(1, "Au moins un client requis"),
 
-  accessLevel: z.enum(Object.values(SITE_ACCESS)).optional(),
+  // ── NOUVEAUX CHAMPS ──────────────────────────────────────
+
+  typology: z
+    .enum(Object.values(SITE_TYPOLOGY), {
+      errorMap: () => ({ message: "Typologie invalide" }),
+    })
+    .optional(),
+
+  configuration: z
+    .enum(Object.values(SITE_CONFIGURATION), {
+      errorMap: () => ({
+        message: "Configuration invalide — outdoor ou indoor",
+      }),
+    })
+    .optional(),
+
+  siteType: z
+    .enum(Object.values(SITE_TYPE), {
+      errorMap: () => ({
+        message: "Type de site invalide — rooftop ou greenfield",
+      }),
+    })
+    .optional(),
+
+  priority: z
+    .enum(Object.values(SITE_PRIORITY), {
+      errorMap: () => ({ message: "Priorité invalide" }),
+    })
+    .optional(),
+
+  // ── ACCES ────────────────────────────────────────────────
+
+  accessLevel: z
+    .enum(Object.values(SITE_ACCESS), {
+      errorMap: () => ({ message: "Niveau d'accès invalide" }),
+    })
+    .optional(),
 
   accessNotes: z.string().trim().optional(),
 
-  keyLocation: z.enum(Object.values(KEY_LOCATION)).optional(),
+  keyLocation: z
+    .enum(Object.values(KEY_LOCATION), {
+      errorMap: () => ({ message: "Localisation clés invalide" }),
+    })
+    .optional(),
 
   keyNotes: z.string().trim().optional(),
 
@@ -67,5 +108,4 @@ export const createSiteSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
-// Mise a jour d'un site (tous les champs optionnels)
 export const updateSiteSchema = createSiteSchema.partial();

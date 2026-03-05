@@ -1,11 +1,12 @@
 import {
   createSite,
   getSites,
-  getSiteByCode,
   getSiteById,
+  getSiteByCode,
   updateSite,
   checkSiteAuditStatus,
   reopenSiteAudit,
+  deleteSite,
 } from "../services/site.service.js";
 import { getPagination } from "../utils/pagination.js";
 import { success, error, paginated } from "../utils/response.js";
@@ -15,12 +16,25 @@ export const siteController = {
   async list(ctx) {
     try {
       const { page, limit, skip } = getPagination(ctx.query);
-      const { zone, status, client, search } = ctx.query;
+      const {
+        zone,
+        status,
+        client,
+        typology,
+        configuration,
+        siteType,
+        priority,
+        search,
+      } = ctx.query;
 
       const { sites, total } = await getSites({
         zone,
         status,
         client,
+        typology,
+        configuration,
+        siteType,
+        priority,
         search,
         page,
         limit,
@@ -31,6 +45,17 @@ export const siteController = {
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);
+    }
+  },
+
+  // GET /sites/:id
+  async getOne(ctx) {
+    try {
+      const site = await getSiteById(ctx.params.id);
+      return success(site);
+    } catch (err) {
+      ctx.set.status = 404;
+      return error(err.message, 404);
     }
   },
 
@@ -45,11 +70,11 @@ export const siteController = {
     }
   },
 
-  // GET /sites/:id
-  async getOne(ctx) {
+  // GET /sites/check/:code
+  async checkStatus(ctx) {
     try {
-      const site = await getSiteById(ctx.params.id);
-      return success(site);
+      const result = await checkSiteAuditStatus(ctx.params.code);
+      return success(result);
     } catch (err) {
       ctx.set.status = 404;
       return error(err.message, 404);
@@ -79,28 +104,23 @@ export const siteController = {
     }
   },
 
-  // GET /sites/check/:code
-  // Le technicien saisit le code site — verifie si audit possible
-  async checkStatus(ctx) {
-    try {
-      const result = await checkSiteAuditStatus(ctx.params.code);
-      return success(result);
-    } catch (err) {
-      ctx.set.status = 404;
-      return error(err.message, 404);
-    }
-  },
-
   // POST /sites/:id/reopen
-  // Admin ou superviseur autorise la reprise d'un audit
   async reopen(ctx) {
     try {
-      const site = await reopenSiteAudit(
-        ctx.params.id,
-        ctx.user._id,
-        ctx.body.reason,
-      );
-      return success(site, "Site reouvert pour nouvel audit");
+      const userId = ctx.user?._id || ctx.user?.id;
+      const reason = ctx.body?.reason;
+      const site = await reopenSiteAudit(ctx.params.id, userId, reason);
+      return success(site, "Site rouvert");
+    } catch (err) {
+      ctx.set.status = 400;
+      return error(err.message);
+    }
+  },
+  // DELETE /sites/:id
+  async delete(ctx) {
+    try {
+      const result = await deleteSite(ctx.params.id);
+      return success(result, "Site supprimé avec succès");
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);

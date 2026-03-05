@@ -6,18 +6,36 @@ import {
 } from "../services/equipment.service.js";
 import { success, error } from "../utils/response.js";
 
+const VALID_TYPES = [
+  "generator",
+  "rectifier",
+  "battery",
+  "solar",
+  "earthing",
+  "fuelTank",
+  "compteurCIE",
+];
+
 export const equipmentController = {
   // POST /equipment/:auditId/:type
   async save(ctx) {
     try {
       const { auditId, type } = ctx.params;
+
+      if (!VALID_TYPES.includes(type)) {
+        ctx.set.status = 400;
+        return error(
+          `Type d'équipement invalide. Valeurs acceptées : ${VALID_TYPES.join(", ")}`,
+        );
+      }
+
       const equipment = await saveEquipment(
         auditId,
         ctx.user._id,
         type,
         ctx.body,
       );
-      return success(equipment, `${type} sauvegarde`);
+      return success(equipment, `${type} sauvegardé`);
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);
@@ -28,6 +46,12 @@ export const equipmentController = {
   async getOne(ctx) {
     try {
       const { auditId, type } = ctx.params;
+
+      if (!VALID_TYPES.includes(type)) {
+        ctx.set.status = 400;
+        return error(`Type d'équipement invalide`);
+      }
+
       const equipment = await getEquipment(auditId, type);
       return success(equipment);
     } catch (err) {
@@ -44,7 +68,7 @@ export const equipmentController = {
         ctx.user._id,
         ctx.body,
       );
-      return success(clientLoad, "Charge client sauvegardee");
+      return success(clientLoad, "Charge client sauvegardée");
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);

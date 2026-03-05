@@ -2,6 +2,7 @@ import { Audit } from "../models/Audit.model.js";
 import { Site } from "../models/Site.model.js";
 import { AUDIT_STATUS, SITE_STATUS } from "../config/constants.js";
 import { getScoreSummary } from "../utils/scoreCalculator.js";
+import { notifyAdmins } from "./notification.service.js";
 import {
   emitAuditStarted,
   emitAuditSubmitted,
@@ -180,6 +181,9 @@ export async function computeAuditScore(auditId) {
 /**
  * Soumet un audit pour validation
  */
+/**
+ * Soumet un audit pour validation
+ */
 export async function submitAudit(auditId, technicianId, notes) {
   const audit = await Audit.findOne({
     _id: auditId,
@@ -198,17 +202,31 @@ export async function submitAudit(auditId, technicianId, notes) {
 
   await audit.save();
 
-  // Met a jour le site
+  // Met à jour le site
   await Site.findByIdAndUpdate(audit.site, {
     status: SITE_STATUS.COMPLETED,
   });
 
-  // Notifie le dashboard
-  const populated = await audit.populate([
-    { path: "site", select: "name code zone" },
-    { path: "technician", select: "name techCode" },
-  ]);
+  // Populate pour les notifications et les events
+  const populated = await Audit.findById(auditId)
+    .populate("site", "name code zone city")
+    .populate("technician", "name techCode zone");
 
+  const site = populated.site;
+  const technician = populated.technician;
+
+  // ── NOTIFICATIONS ADMINS ─────────────────────────────────
+  await notifyAdmins({
+    type: "audit_submitted",
+    title: "📋 Audit soumis — validation requise",
+    message: `${technician.name} (${technician.techCode}) a soumis l'audit du site ${site.code} — ${site.name} (${site.city})`,
+    priority: "high",
+    refModel: "Audit",
+    refId: audit._id,
+    sender: technicianId,
+  });
+
+  // ── WEBSOCKET ────────────────────────────────────────────
   emitAuditSubmitted(populated);
   emitSiteUpdated({ siteId: audit.site, status: SITE_STATUS.COMPLETED });
 
@@ -238,6 +256,23 @@ export async function validateAudit(auditId, validatorId) {
   // Incremente le compteur d'audits du site
   await Site.findByIdAndUpdate(audit.site, {
     $inc: { auditCount: 1 },
+  });
+
+  // Après la mise à jour, ajoute :
+  const auditPopulated = await Audit.findById(auditId)
+    .populate("site", "name code city")
+    .populate("technician", "name techCode");
+
+  // Notifie le technicien que son audit est validé
+  await createNotification({
+    recipient: auditPopulated.technician._id,
+    type: "audit_validated",
+    title: "✅ Audit validé",
+    message: `Votre audit du site ${auditPopulated.site.code} — ${auditPopulated.site.name} a été validé`,
+    priority: "medium",
+    refModel: "Audit",
+    refId: auditId,
+    sender: validatorId,
   });
 
   return audit;

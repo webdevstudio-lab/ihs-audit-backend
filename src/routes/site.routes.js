@@ -1,7 +1,11 @@
 import { Elysia } from "elysia";
 import { siteController } from "../controllers/site.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
-import { supervisorOnly, allRoles } from "../middleware/role.middleware.js";
+import {
+  supervisorOnly,
+  adminOnly,
+  allRoles,
+} from "../middleware/role.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import {
   createSiteSchema,
@@ -14,7 +18,7 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
   .use(authMiddleware)
   .use(allRoles)
 
-  // Verification statut audit par code — technicien
+  // Verification statut audit par code — tous roles
   .get("/check/:code", (ctx) => siteController.checkStatus(ctx), {
     detail: {
       tags: ["Sites"],
@@ -22,7 +26,7 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
     },
   })
 
-  // Recuperer un site par son code
+  // Recuperer un site par son code — tous roles
   .get("/code/:code", (ctx) => siteController.getByCode(ctx), {
     detail: {
       tags: ["Sites"],
@@ -30,7 +34,7 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
     },
   })
 
-  // Liste des sites
+  // Liste des sites — tous roles
   .get("/", (ctx) => siteController.list(ctx), {
     detail: {
       tags: ["Sites"],
@@ -38,7 +42,7 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
     },
   })
 
-  // Detail d'un site
+  // Detail d'un site — tous roles
   .get("/:id", (ctx) => siteController.getOne(ctx), {
     detail: {
       tags: ["Sites"],
@@ -46,8 +50,10 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
     },
   })
 
-  // Creation — superviseurs et admins
+  // ── SUPERVISEUR + ADMIN ───────────────────────────────────
   .use(supervisorOnly)
+
+  // Creation
   .post("/", (ctx) => siteController.create(ctx), {
     beforeHandle: [validate(createSiteSchema)],
     detail: {
@@ -71,5 +77,16 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
     detail: {
       tags: ["Sites"],
       summary: "Autoriser la reprise d un audit sur ce site",
+    },
+  })
+
+  // ── ADMIN UNIQUEMENT ──────────────────────────────────────
+  .use(adminOnly)
+
+  // Suppression site
+  .delete("/:id", (ctx) => siteController.delete(ctx), {
+    detail: {
+      tags: ["Sites"],
+      summary: "Supprimer un site — admin uniquement",
     },
   });

@@ -6,9 +6,10 @@ import { SolarSystem } from "../models/SolarSystem.model.js";
 import { Earthing } from "../models/Earthing.model.js";
 import { FuelTank } from "../models/FuelTank.model.js";
 import { ClientLoad } from "../models/ClientLoad.model.js";
+import { CompteurCIE } from "../models/CompteurCIE.model.js";
 import { AUDIT_STATUS } from "../config/constants.js";
 
-// Map nom equipement => Model Mongoose correspondant
+// Map nom equipement => Model Mongoose
 const EQUIPMENT_MODELS = {
   generator: Generator,
   rectifier: Rectifier,
@@ -16,10 +17,11 @@ const EQUIPMENT_MODELS = {
   solar: SolarSystem,
   earthing: Earthing,
   fuelTank: FuelTank,
+  compteurCIE: CompteurCIE, // ← AJOUT
 };
 
 /**
- * Verifie que l'audit existe et est modifiable par ce technicien
+ * Vérifie que l'audit existe et est modifiable par ce technicien
  */
 async function getEditableAudit(auditId, technicianId) {
   const audit = await Audit.findOne({
@@ -36,34 +38,31 @@ async function getEditableAudit(auditId, technicianId) {
 }
 
 /**
- * Sauvegarde ou met a jour un equipement sur un audit
- * Fonctionne pour tous les types d'equipements
+ * Sauvegarde ou met à jour un équipement sur un audit
  *
  * @param {string} auditId      - ID de l'audit
- * @param {string} technicianId - ID du technicien connecte
- * @param {string} type         - Type : 'generator' | 'rectifier' | 'battery' | 'solar' | 'earthing' | 'fuelTank'
- * @param {Object} data         - Donnees de l'equipement (validees par Zod)
+ * @param {string} technicianId - ID du technicien connecté
+ * @param {string} type         - Type d'équipement
+ * @param {Object} data         - Données validées par Zod
  */
 export async function saveEquipment(auditId, technicianId, type, data) {
   const Model = EQUIPMENT_MODELS[type];
-  if (!Model) throw new Error(`Type equipement inconnu : ${type}`);
+  if (!Model) throw new Error(`Type équipement inconnu : ${type}`);
 
   const audit = await getEditableAudit(auditId, technicianId);
 
   let equipment;
 
-  // Si l'equipement existe deja on le met a jour
   if (audit[type]) {
+    // Mise à jour
     equipment = await Model.findByIdAndUpdate(
       audit[type],
       { $set: data },
       { new: true, runValidators: true },
     );
   } else {
-    // Sinon on le cree et on lie l'audit
+    // Création + liaison audit
     equipment = await Model.create({ ...data, audit: auditId });
-
-    // Lie l'equipement a l'audit
     audit[type] = equipment._id;
     await audit.save();
   }
@@ -72,25 +71,22 @@ export async function saveEquipment(auditId, technicianId, type, data) {
 }
 
 /**
- * Recupere un equipement d'un audit
+ * Récupère un équipement d'un audit avec ses photos
  */
 export async function getEquipment(auditId, type) {
   const Model = EQUIPMENT_MODELS[type];
-  if (!Model) throw new Error(`Type equipement inconnu : ${type}`);
+  if (!Model) throw new Error(`Type équipement inconnu : ${type}`);
 
   const equipment = await Model.findOne({ audit: auditId }).populate("photos");
-
   return equipment;
 }
 
 /**
- * Sauvegarde la charge d'un client sur un site
- * Un audit peut avoir plusieurs ClientLoad (un par client)
+ * Sauvegarde la charge d'un client sur un audit
  */
 export async function saveClientLoad(auditId, technicianId, data) {
   const audit = await getEditableAudit(auditId, technicianId);
 
-  // Cherche si ce client a deja une entree sur cet audit
   const existing = await ClientLoad.findOne({
     audit: auditId,
     client: data.client,
@@ -106,8 +102,6 @@ export async function saveClientLoad(auditId, technicianId, data) {
     );
   } else {
     clientLoad = await ClientLoad.create({ ...data, audit: auditId });
-
-    // Ajoute a la liste clientLoads de l'audit
     audit.clientLoads.push(clientLoad._id);
     await audit.save();
   }
@@ -116,7 +110,7 @@ export async function saveClientLoad(auditId, technicianId, data) {
 }
 
 /**
- * Recupere toutes les charges clients d'un audit
+ * Récupère toutes les charges clients d'un audit
  */
 export async function getClientLoads(auditId) {
   return ClientLoad.find({ audit: auditId });

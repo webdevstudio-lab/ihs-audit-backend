@@ -26,16 +26,24 @@ export async function getSites({
   zone,
   status,
   client,
+  typology,
+  configuration,
+  siteType,
+  priority,
   search,
   page,
   limit,
   skip,
 }) {
-  const filter = { isActive: true };
+  const filter = {};
 
   if (zone) filter.zone = zone;
   if (status) filter.status = status;
   if (client) filter.clients = client;
+  if (typology) filter.typology = typology;
+  if (configuration) filter.configuration = configuration;
+  if (siteType) filter.siteType = siteType;
+  if (priority) filter.priority = priority;
 
   if (search) {
     filter.$or = [
@@ -94,12 +102,10 @@ export async function updateSite(id, data) {
 
 /**
  * Verifie si un site peut etre audite
- * Retourne le statut et l'audit existant si present
  */
 export async function checkSiteAuditStatus(code) {
   const site = await getSiteByCode(code);
 
-  // Cherche un audit en cours ou soumis sur ce site
   const existingAudit = await Audit.findOne({
     site: site._id,
     status: {
@@ -113,7 +119,6 @@ export async function checkSiteAuditStatus(code) {
     .populate("technician", "name techCode")
     .sort({ createdAt: -1 });
 
-  // Cherche le dernier audit valide
   const lastValidated = await Audit.findOne({
     site: site._id,
     status: AUDIT_STATUS.VALIDATED,
@@ -121,15 +126,14 @@ export async function checkSiteAuditStatus(code) {
 
   return {
     site,
-    existingAudit, // audit en cours (bloque si present)
-    lastValidated, // dernier audit valide (historique)
+    existingAudit,
+    lastValidated,
     canAudit: !existingAudit || site.reopenedAt !== undefined,
   };
 }
 
 /**
  * Autorise la reprise d'un audit sur un site
- * Reservé aux admins et superviseurs
  */
 export async function reopenSiteAudit(siteId, userId, reason) {
   const site = await Site.findById(siteId);
@@ -140,7 +144,6 @@ export async function reopenSiteAudit(siteId, userId, reason) {
   site.status = SITE_STATUS.PENDING;
   await site.save();
 
-  // Marque aussi l'audit existant comme reouvert
   await Audit.updateMany(
     {
       site: siteId,
@@ -159,4 +162,31 @@ export async function reopenSiteAudit(siteId, userId, reason) {
   );
 
   return site;
+}
+
+/**
+ * Supprime un site (admin uniquement)
+ */
+export async function deleteSite(id) {
+  const site = await Site.findById(id);
+  if (!site) throw new Error("Site introuvable");
+
+  // Vérifie qu'il n'y a pas d'audit en cours
+  const activeAudit = await Audit.findOne({
+    site: id,
+    status: {
+      $in: [
+        AUDIT_STATUS.DRAFT,
+        AUDIT_STATUS.IN_PROGRESS,
+        AUDIT_STATUS.SUBMITTED,
+      ],
+    },
+  });
+
+  if (activeAudit) {
+    throw new Error("Impossible de supprimer un site avec un audit en cours");
+  }
+
+  await Site.findByIdAndDelete(id);
+  return { deleted: true, id };
 }

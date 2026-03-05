@@ -7,6 +7,8 @@ import { equipmentRoutes } from "./equipment.routes.js";
 import { photoRoutes } from "./photo.routes.js";
 import { iaRoutes } from "./ia.routes.js";
 import { statsRoutes } from "./stats.routes.js";
+import { compteurCIERoutes } from "./compteurCIE.routes.js";
+import { notificationRoutes } from "./notification.routes.js";
 
 export const routes = new Elysia({ prefix: "/api" })
   .use(authRoutes)
@@ -16,4 +18,6 @@ export const routes = new Elysia({ prefix: "/api" })
   .use(equipmentRoutes)
   .use(photoRoutes)
   .use(iaRoutes)
-  .use(statsRoutes);
+  .use(statsRoutes)
+  .use(notificationRoutes)
+  .use(compteurCIERoutes);

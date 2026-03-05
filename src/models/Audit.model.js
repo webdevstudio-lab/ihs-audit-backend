@@ -45,6 +45,7 @@ const auditSchema = new mongoose.Schema(
     rectifier: { type: mongoose.Schema.Types.ObjectId, ref: "Rectifier" },
     solar: { type: mongoose.Schema.Types.ObjectId, ref: "SolarSystem" },
     battery: { type: mongoose.Schema.Types.ObjectId, ref: "Battery" },
+    compteurCIE: { type: mongoose.Schema.Types.ObjectId, ref: "CompteurCIE" },
     earthing: { type: mongoose.Schema.Types.ObjectId, ref: "Earthing" },
     fuelTank: { type: mongoose.Schema.Types.ObjectId, ref: "FuelTank" },
 
@@ -140,6 +141,8 @@ const auditSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+    compteurCIE: { type: String, trim: true },
 
     previousAudit: {
       type: mongoose.Schema.Types.ObjectId,

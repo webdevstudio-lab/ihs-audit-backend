@@ -2,7 +2,6 @@ import { Elysia } from "elysia";
 import { equipmentController } from "../controllers/equipment.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 import { allRoles } from "../middleware/role.middleware.js";
-import { validate } from "../middleware/validate.middleware.js";
 import {
   generatorSchema,
   rectifierSchema,
@@ -10,6 +9,7 @@ import {
   solarSchema,
   earthingSchema,
   fuelTankSchema,
+  compteurCIESchema, // ← AJOUT
 } from "../validations/equipment.validation.js";
 
 // Map type => schema de validation
@@ -20,6 +20,7 @@ const SCHEMAS = {
   solar: solarSchema,
   earthing: earthingSchema,
   fuelTank: fuelTankSchema,
+  compteurCIE: compteurCIESchema, // ← AJOUT
 };
 
 export const equipmentRoutes = new Elysia({ prefix: "/equipment" })
@@ -34,7 +35,7 @@ export const equipmentRoutes = new Elysia({ prefix: "/equipment" })
     {
       detail: {
         tags: ["Equipment"],
-        summary: "Charges clients d un audit",
+        summary: "Charges clients d'un audit",
       },
     },
   )
@@ -46,16 +47,17 @@ export const equipmentRoutes = new Elysia({ prefix: "/equipment" })
     {
       detail: {
         tags: ["Equipment"],
-        summary: "Sauvegarder la charge d un client",
+        summary: "Sauvegarder la charge d'un client",
       },
     },
   )
 
   // GET /equipment/:auditId/:type
+  // type: generator | rectifier | battery | solar | earthing | fuelTank | compteurCIE
   .get("/:auditId/:type", (ctx) => equipmentController.getOne(ctx), {
     detail: {
       tags: ["Equipment"],
-      summary: "Recuperer un equipement d un audit",
+      summary: "Récupérer un équipement d'un audit",
     },
   })
 
@@ -63,26 +65,37 @@ export const equipmentRoutes = new Elysia({ prefix: "/equipment" })
   .post(
     "/:auditId/:type",
     (ctx) => {
-      // Validation dynamique selon le type d'equipement
       const schema = SCHEMAS[ctx.params.type];
-      if (schema) {
-        const result = schema.safeParse(ctx.body);
-        if (!result.success) {
-          ctx.set.status = 422;
-          return {
-            success: false,
-            message: "Donnees invalides",
-            details: result.error.errors,
-          };
-        }
-        ctx.body = result.data;
+
+      if (!schema) {
+        ctx.set.status = 400;
+        return {
+          success: false,
+          message: `Type invalide. Valeurs acceptées : ${Object.keys(SCHEMAS).join(", ")}`,
+        };
       }
+
+      const result = schema.safeParse(ctx.body);
+      if (!result.success) {
+        ctx.set.status = 422;
+        return {
+          success: false,
+          message: "Données invalides",
+          errors: result.error.errors.map((e) => ({
+            field: e.path.join("."),
+            message: e.message,
+          })),
+        };
+      }
+
+      ctx.body = result.data;
       return equipmentController.save(ctx);
     },
     {
       detail: {
         tags: ["Equipment"],
-        summary: "Sauvegarder un equipement (generator, rectifier, battery...)",
+        summary:
+          "Sauvegarder un équipement (generator, rectifier, battery, solar, earthing, fuelTank, compteurCIE)",
       },
     },
   );

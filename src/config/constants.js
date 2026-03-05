@@ -149,3 +149,93 @@ export const CONTACT_TYPE = {
   MANAGER: "manager", // Gestionnaire
   OTHER: "other",
 };
+
+// Typologie energetique du site
+export const SITE_TYPOLOGY = {
+  GRID_ONLY: "grid_only",
+  GRID_ACDG: "grid_acdg",
+  GRID_6KW_SOLAR_ACDG: "grid_6kw_solar_acdg",
+  GRID_6KW_SOLAR_DCDG: "grid_6kw_solar_dcdg",
+  GRID_12KW_SOLAR_ACDG: "grid_12kw_solar_acdg",
+  GRID_12KW_SOLAR_DCDG: "grid_12kw_solar_dcdg",
+  GEN_ONLY: "gen_only",
+  SOLAR_6KW_ONLY: "solar_6kw_only",
+  SOLAR_12KW_ONLY: "solar_12kw_only",
+};
+
+export const SITE_TYPOLOGY_LABEL = {
+  grid_only: "Grid Only",
+  grid_acdg: "Grid — ACDG",
+  grid_6kw_solar_acdg: "Grid + 6KW Solar — ACDG",
+  grid_6kw_solar_dcdg: "Grid + 6KW Solar — DCDG",
+  grid_12kw_solar_acdg: "Grid + 12KW Solar — ACDG",
+  grid_12kw_solar_dcdg: "Grid + 12KW Solar — DCDG",
+  gen_only: "Gen Only",
+  solar_6kw_only: "6KW Solar Only",
+  solar_12kw_only: "12KW Solar Only",
+};
+
+// Configuration physique du site
+export const SITE_CONFIGURATION = {
+  OUTDOOR: "outdoor",
+  INDOOR: "indoor",
+};
+
+export const SITE_CONFIGURATION_LABEL = {
+  outdoor: "Outdoor",
+  indoor: "Indoor",
+};
+
+// Type de site
+export const SITE_TYPE = {
+  ROOFTOP: "rooftop",
+  GREENFIELD: "greenfield",
+};
+
+export const SITE_TYPE_LABEL = {
+  rooftop: "Rooftop",
+  greenfield: "Greenfield",
+};
+
+// Priorité d'intervention
+export const SITE_PRIORITY = {
+  VERY_HIGH: "very_high",
+  HIGH: "high",
+  MEDIUM: "medium",
+  LOW: "low",
+};
+
+export const SITE_PRIORITY_LABEL = {
+  very_high: "Très haute",
+  high: "Haute",
+  medium: "Moyenne",
+  low: "Basse",
+};
+
+export const SITE_PRIORITY_COLOR = {
+  very_high: "#E63329",
+  high: "#F59E0B",
+  medium: "#06B6D4",
+  low: "#4ADE80",
+};
+
+// Ampérage compteur CIE
+export const COMPTEUR_AMPERAGE = {
+  A5: "5A",
+  A10: "10A",
+  A15: "15A",
+  A20: "20A",
+  A30: "30A",
+  A60: "60A",
+};
+
+// Type de phase compteur CIE
+export const COMPTEUR_PHASE = {
+  MONOPHASE: "monophase",
+  TRIPHASE: "triphase",
+};
+
+export const COMPTEUR_PHASE_LABEL = {
+  monophase: "Monophasé",
+  triphase: "Triphasé",
+};

@@ -1,51 +1,46 @@
 import mongoose from "mongoose";
 import {
   SITE_STATUS,
-  ZONES,
   SITE_ACCESS,
   KEY_LOCATION,
   CONTACT_TYPE,
+  ZONES,
+  CLIENTS,
+  SITE_TYPOLOGY,
+  SITE_CONFIGURATION,
+  SITE_TYPE,
+  SITE_PRIORITY,
 } from "../config/constants.js";
 
-const siteContactSchema = new mongoose.Schema(
+const contactSchema = new mongoose.Schema(
   {
-    type: {
-      type: String,
-      enum: Object.values(CONTACT_TYPE),
-    },
+    type: { type: String, enum: Object.values(CONTACT_TYPE) },
+    name: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    phone2: { type: String, trim: true },
+    notes: { type: String, trim: true },
+  },
+  { _id: false },
+);
 
-    name: {
-      type: String,
-      trim: true,
-    },
-
-    phone: {
-      type: String,
-      trim: true,
-    },
-
-    phone2: {
-      type: String,
-      trim: true,
-    },
-
-    notes: {
-      type: String,
-      trim: true,
-    },
+const coordinatesSchema = new mongoose.Schema(
+  {
+    lat: { type: Number, required: true, min: -90, max: 90 },
+    lng: { type: Number, required: true, min: -180, max: 180 },
   },
   { _id: false },
 );
 
 const siteSchema = new mongoose.Schema(
   {
-    // ── IDENTIFICATION ──────────────────────────────────────
+    // ── IDENTITE ─────────────────────────────────────────────
     code: {
       type: String,
       required: [true, "Code site obligatoire"],
       unique: true,
-      trim: true,
       uppercase: true,
+      trim: true,
+      index: true,
     },
 
     name: {
@@ -54,7 +49,7 @@ const siteSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ── LOCALISATION ────────────────────────────────────────
+    // ── LOCALISATION ─────────────────────────────────────────
     city: {
       type: String,
       required: [true, "Ville obligatoire"],
@@ -71,48 +66,54 @@ const siteSchema = new mongoose.Schema(
       enum: Object.values(ZONES),
     },
 
-    coordinates: {
-      lat: { type: Number },
-      lng: { type: Number },
-    },
+    coordinates: coordinatesSchema,
 
     address: {
       type: String,
       trim: true,
     },
 
-    // ── CLIENTS ─────────────────────────────────────────────
-    clients: [
-      {
-        type: String,
-        enum: ["MTN", "Orange", "Moov"],
+    // ── CLIENTS ──────────────────────────────────────────────
+    clients: {
+      type: [{ type: String, enum: CLIENTS }],
+      required: [true, "Au moins un client requis"],
+      validate: {
+        validator: (v) => v && v.length > 0,
+        message: "Au moins un client requis",
       },
-    ],
+    },
 
-    // ── STATUT & SCORE ──────────────────────────────────────
+    // ── CLASSIFICATION ───────────────────────────────────────
+    typology: {
+      type: String,
+      enum: Object.values(SITE_TYPOLOGY),
+    },
+
+    configuration: {
+      type: String,
+      enum: Object.values(SITE_CONFIGURATION),
+    },
+
+    siteType: {
+      type: String,
+      enum: Object.values(SITE_TYPE),
+    },
+
+    priority: {
+      type: String,
+      enum: Object.values(SITE_PRIORITY),
+      default: SITE_PRIORITY.MEDIUM,
+    },
+
+    // ── STATUT ───────────────────────────────────────────────
     status: {
       type: String,
       enum: Object.values(SITE_STATUS),
       default: SITE_STATUS.PENDING,
+      index: true,
     },
 
-    lastScore: {
-      type: Number,
-      min: 0,
-      max: 100,
-    },
-
-    lastAudit: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Audit",
-    },
-
-    auditCount: {
-      type: Number,
-      default: 0,
-    },
-
-    // ── ACCES AU SITE ────────────────────────────────────────
+    // ── ACCES ────────────────────────────────────────────────
     accessLevel: {
       type: String,
       enum: Object.values(SITE_ACCESS),
@@ -123,7 +124,6 @@ const siteSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ── CLES DU SITE ─────────────────────────────────────────
     keyLocation: {
       type: String,
       enum: Object.values(KEY_LOCATION),
@@ -134,40 +134,42 @@ const siteSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ── CONTACTS SUR SITE ────────────────────────────────────
-    contacts: [siteContactSchema],
+    // ── CONTACTS ─────────────────────────────────────────────
+    contacts: [contactSchema],
 
-    // ── REPRISE D'AUDIT ──────────────────────────────────────
-    reopenedBy: {
+    // ── AUDIT ────────────────────────────────────────────────
+    lastAuditDate: {
+      type: Date,
+    },
+
+    lastAuditScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+    },
+
+    assignedTechnician: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
 
-    reopenedAt: {
-      type: Date,
-    },
-
-    // ── NOTES GENERALES ──────────────────────────────────────
+    // ── NOTES ────────────────────────────────────────────────
     notes: {
       type: String,
       trim: true,
     },
-
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   },
 );
 
-// Index — on ne remet pas code ici car deja unique:true dans le schema
-siteSchema.index({ zone: 1 });
-siteSchema.index({ status: 1 });
+// Index composés pour les requêtes fréquentes
+siteSchema.index({ zone: 1, status: 1 });
 siteSchema.index({ clients: 1 });
-siteSchema.index({ accessLevel: 1 });
-siteSchema.index({ "coordinates.lat": 1, "coordinates.lng": 1 });
+siteSchema.index({ priority: 1, status: 1 });
+siteSchema.index({ typology: 1 });
 
 export const Site = mongoose.model("Site", siteSchema);
