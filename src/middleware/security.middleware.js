@@ -7,18 +7,18 @@ import {
   getLockTimeRemaining,
 } from "../lib/security.js";
 
-/**
- * Middleware securite global — applique sur toutes les routes
- * Ordre : DDoS → IP bloquee → Detection attaque → Headers securite
- */
 export const securityMiddleware = (app) =>
   app.onRequest(async ({ request, set }) => {
+    const path = new URL(request.url).pathname;
+
+    // Ignore WebSocket
+    if (path.startsWith("/ws")) return;
+
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       request.headers.get("x-real-ip") ||
       "unknown";
     const userAgent = request.headers.get("user-agent") || "";
-    const path = new URL(request.url).pathname;
     const method = request.method;
 
     // 1. Anti-DDoS
@@ -38,7 +38,7 @@ export const securityMiddleware = (app) =>
       throw new Error(`Trop de requetes — reessayez dans ${ddos.resetIn}s`);
     }
 
-    // 2. IP bloquee (brute force)
+    // 2. IP bloquee
     if (isIpBlocked(ip)) {
       const remaining = getLockTimeRemaining(ip);
       await logSecurityEvent({
@@ -51,9 +51,11 @@ export const securityMiddleware = (app) =>
       throw new Error(`IP bloquee — reessayez dans ${remaining}s`);
     }
 
-    // 3. Detection attaques sur l'URL
-    const urlAttack = detectAttack(path + new URL(request.url).search);
+    // 3. Detection attaques URL
+    const fullUrl = path + new URL(request.url).search;
+    const urlAttack = detectAttack(fullUrl);
     if (urlAttack.detected) {
+      console.log("🔴 Attaque détectée:", urlAttack.type, "| URL:", fullUrl);
       await logSecurityEvent({
         event: "suspicious_activity",
         ip,
@@ -67,7 +69,7 @@ export const securityMiddleware = (app) =>
       throw new Error("Requete invalide");
     }
 
-    // 4. Headers de securite
+    // 4. Headers securite
     set.headers["X-Content-Type-Options"] = "nosniff";
     set.headers["X-Frame-Options"] = "DENY";
     set.headers["X-XSS-Protection"] = "1; mode=block";
@@ -77,25 +79,24 @@ export const securityMiddleware = (app) =>
     set.headers["Permissions-Policy"] =
       "camera=(), microphone=(), geolocation=()";
     set.headers["X-Powered-By"] = "IPT-PowerTech";
-
-    // Ajoute les headers DDoS info
     set.headers["X-RateLimit-Limit"] = String(ddos.limit);
     set.headers["X-RateLimit-Remaining"] = String(ddos.remaining);
   });
 
-/**
- * Middleware sanitisation — nettoie le body avant validation
- */
 export const sanitizeMiddleware = (app) =>
   app.onBeforeHandle(async ({ request, body, set }) => {
+    const path = new URL(request.url).pathname;
+
+    // Ignore WebSocket
+    if (path.startsWith("/ws")) return;
+
     if (!body || typeof body !== "object") return;
 
-    // Sanitise contre NoSQL injection
     const cleaned = sanitizeMongo(body);
-
-    // Detection attaque dans le body
     const bodyAttack = detectAttack(JSON.stringify(cleaned));
+
     if (bodyAttack.detected) {
+      console.log("🔴 Body attaque détectée:", bodyAttack.type);
       const ip = request.headers.get("x-forwarded-for") || "unknown";
       await logSecurityEvent({
         event: "suspicious_activity",
@@ -108,12 +109,11 @@ export const sanitizeMiddleware = (app) =>
     }
   });
 
-/**
- * Middleware rate limit specifique par route
- * Usage : .use(routeRateLimit('auth'))
- */
 export const routeRateLimit = (type) => (app) =>
   app.onRequest(async ({ request, set }) => {
+    const path = new URL(request.url).pathname;
+    if (path.startsWith("/ws")) return;
+
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
     const ddos = checkDdos(ip, type);

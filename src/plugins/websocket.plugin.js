@@ -1,9 +1,24 @@
 import { Elysia } from "elysia";
-import { getSocket } from "../lib/socket.js";
+import { addClient, removeClient } from "../lib/socket.js";
 
-// Plugin qui injecte l'instance socket.io dans le contexte Elysia
-// Permet aux controllers d'emettre des evenements via ctx.io
-export const websocketPlugin = new Elysia({ name: "websocket" }).decorate(
-  "io",
-  () => getSocket(),
-);
+export const websocketPlugin = new Elysia({ name: "websocket" }).ws("/ws", {
+  open(ws) {
+    console.log(`WS connecté : ${ws.id}`);
+    addClient(ws);
+    ws.send(JSON.stringify({ event: "connected", data: { id: ws.id } }));
+  },
+
+  message(ws, message) {
+    try {
+      const { event, data } = JSON.parse(message);
+      if (event === "join:admin") {
+        console.log(`Admin rejoint : ${ws.id}`);
+      }
+    } catch {}
+  },
+
+  close(ws) {
+    console.log(`WS déconnecté : ${ws.id}`);
+    removeClient(ws);
+  },
+});

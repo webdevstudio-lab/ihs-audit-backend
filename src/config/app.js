@@ -15,7 +15,7 @@ import { loggerMiddleware } from "../middleware/logger.middleware.js";
 export function createApp() {
   const app = new Elysia()
 
-    // ── SECURITE EN PREMIER ──────────────────────────────────
+    // ── SECURITE ─────────────────────────────────────────────
     .use(securityMiddleware)
     .use(sanitizeMiddleware)
 
@@ -24,9 +24,11 @@ export function createApp() {
     .use(jwtPlugin)
     .use(swaggerPlugin)
     .use(storagePlugin)
+
+    // ── WEBSOCKET (avant les routes) ─────────────────────────
     .use(websocketPlugin)
 
-    // ── FICHIERS STATIQUES (photos locales) ──────────────────
+    // ── FICHIERS STATIQUES ───────────────────────────────────
     .use(
       staticPlugin({
         assets: "uploads",
@@ -45,6 +47,7 @@ export function createApp() {
       status: "ok",
       app: "IHS Audit API",
       version: "1.0.0",
+      ws: "ws://localhost:3000/ws",
       time: new Date().toISOString(),
     }))
 
