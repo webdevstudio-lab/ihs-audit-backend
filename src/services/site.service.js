@@ -55,7 +55,7 @@ export async function getSites({
 
   const [sites, total] = await Promise.all([
     Site.find(filter)
-      .populate("lastAudit", "status globalScore visitDate")
+      .populate("assignedTechnician", "name techCode")
       .skip(skip)
       .limit(limit)
       .sort({ updatedAt: -1 }),
@@ -70,7 +70,8 @@ export async function getSites({
  */
 export async function getSiteByCode(code) {
   const site = await Site.findOne({ code: code.toUpperCase() }).populate(
-    "lastAudit",
+    "assignedTechnician",
+    "name techCode",
   );
 
   if (!site) throw new Error(`Site ${code} introuvable`);
@@ -81,7 +82,11 @@ export async function getSiteByCode(code) {
  * Recupere un site par son ID
  */
 export async function getSiteById(id) {
-  const site = await Site.findById(id).populate("lastAudit");
+  const site = await Site.findById(id).populate(
+    "assignedTechnician",
+    "name techCode",
+  );
+
   if (!site) throw new Error("Site introuvable");
   return site;
 }
@@ -147,9 +152,7 @@ export async function reopenSiteAudit(siteId, userId, reason) {
   await Audit.updateMany(
     {
       site: siteId,
-      status: {
-        $in: [AUDIT_STATUS.SUBMITTED, AUDIT_STATUS.VALIDATED],
-      },
+      status: { $in: [AUDIT_STATUS.SUBMITTED, AUDIT_STATUS.VALIDATED] },
     },
     {
       $set: {
@@ -171,7 +174,6 @@ export async function deleteSite(id) {
   const site = await Site.findById(id);
   if (!site) throw new Error("Site introuvable");
 
-  // Vérifie qu'il n'y a pas d'audit en cours
   const activeAudit = await Audit.findOne({
     site: id,
     status: {

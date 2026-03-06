@@ -148,7 +148,6 @@ batterySchema.pre("save", function (next) {
   if (this.numberOfStrings && this.numberOfElementsPerString) {
     this.totalElements = this.numberOfStrings * this.numberOfElementsPerString;
   }
-  next();
 });
 
 export const Battery = mongoose.model("Battery", batterySchema);

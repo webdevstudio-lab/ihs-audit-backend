@@ -158,20 +158,22 @@ export async function computeAuditScore(auditId) {
     criticalityLevel: level,
   });
 
-  // Met a jour le score sur le site
+  // Met à jour lastAuditScore et lastAuditDate sur le site
   await Site.findByIdAndUpdate(audit.site._id, {
-    lastScore: score,
-    lastAudit: auditId,
+    lastAuditScore: score,
+    lastAuditDate: new Date(),
   });
 
-  // Si critique : alerte temps reel
   if (level === "critical" || level === "high") {
-    emitCriticalAlert({
-      auditId,
-      site: audit.site,
-      score,
-      level,
-      label,
+    emitCriticalAlert({ auditId, site: audit.site, score, level, label });
+
+    await notifyAdmins({
+      type: "alert_critical",
+      title: `⚠️ Alerte ${level === "critical" ? "CRITIQUE" : "HAUTE"} — ${audit.site.code}`,
+      message: `Score ${score}/100 détecté sur le site ${audit.site.code} — ${audit.site.name}. Intervention requise.`,
+      priority: level === "critical" ? "critical" : "high",
+      refModel: "Audit",
+      refId: auditId,
     });
   }
 

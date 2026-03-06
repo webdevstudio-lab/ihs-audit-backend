@@ -14,20 +14,17 @@ import { loggerMiddleware } from "../middleware/logger.middleware.js";
 
 export function createApp() {
   const app = new Elysia()
-
+    // ── CORS EN PREMIER — avant tout middleware ───────────────
+    .use(corsPlugin)
     // ── SECURITE ─────────────────────────────────────────────
     .use(securityMiddleware)
     .use(sanitizeMiddleware)
-
     // ── PLUGINS ──────────────────────────────────────────────
-    .use(corsPlugin)
     .use(jwtPlugin)
     .use(swaggerPlugin)
     .use(storagePlugin)
-
-    // ── WEBSOCKET (avant les routes) ─────────────────────────
+    // ── WEBSOCKET ────────────────────────────────────────────
     .use(websocketPlugin)
-
     // ── FICHIERS STATIQUES ───────────────────────────────────
     .use(
       staticPlugin({
@@ -35,13 +32,10 @@ export function createApp() {
         prefix: "/uploads",
       }),
     )
-
     // ── LOGS ─────────────────────────────────────────────────
     .use(loggerMiddleware)
-
     // ── ROUTES ───────────────────────────────────────────────
     .use(routes)
-
     // ── HEALTH CHECK ─────────────────────────────────────────
     .get("/health", () => ({
       status: "ok",
@@ -50,16 +44,12 @@ export function createApp() {
       ws: "ws://localhost:3000/ws",
       time: new Date().toISOString(),
     }))
-
-    // ── ERREURS GLOBALES ─────────────────────────────────────
     .onError(({ code, error, set }) => {
       console.error(`[ERROR] ${code}:`, error.message);
-
       if (code === "NOT_FOUND") {
         set.status = 404;
         return { success: false, message: "Route introuvable", code: 404 };
       }
-
       if (code === "VALIDATION") {
         set.status = 422;
         return {
@@ -69,7 +59,6 @@ export function createApp() {
           details: error.message,
         };
       }
-
       set.status = 500;
       return {
         success: false,
@@ -80,6 +69,5 @@ export function createApp() {
         code: 500,
       };
     });
-
   return app;
 }
