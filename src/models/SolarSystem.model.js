@@ -123,11 +123,10 @@ const solarSystemSchema = new mongoose.Schema(
 );
 
 // Calcul automatique puissance totale
-solarSystemSchema.pre("save", function (next) {
+solarSystemSchema.pre("save", function () {
   if (this.panelCount && this.panelPowerWp) {
     this.totalPowerWp = this.panelCount * this.panelPowerWp;
   }
-  next();
 });
 
 export const SolarSystem = mongoose.model("SolarSystem", solarSystemSchema);

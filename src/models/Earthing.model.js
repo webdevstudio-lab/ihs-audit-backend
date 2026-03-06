@@ -77,11 +77,10 @@ const earthingSchema = new mongoose.Schema(
 );
 
 // Calcul automatique de la conformite
-earthingSchema.pre("save", function (next) {
+earthingSchema.pre("save", function () {
   if (this.resistance !== undefined && this.resistance !== null) {
     this.isCompliant = this.resistance < 5;
   }
-  next();
 });
 
 export const Earthing = mongoose.model("Earthing", earthingSchema);

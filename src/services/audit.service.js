@@ -2,7 +2,7 @@ import { Audit } from "../models/Audit.model.js";
 import { Site } from "../models/Site.model.js";
 import { AUDIT_STATUS, SITE_STATUS } from "../config/constants.js";
 import { getScoreSummary } from "../utils/scoreCalculator.js";
-import { notifyAdmins } from "./notification.service.js";
+import { notifyAdmins, createNotification } from "./notification.service.js";
 import {
   emitAuditStarted,
   emitAuditSubmitted,
@@ -10,64 +10,70 @@ import {
   emitSiteUpdated,
 } from "../lib/socket.js";
 
-/**
- * Demarre un nouvel audit
- * Le technicien saisit le code site depuis l'application mobile
- */
+// ─── Démarrer ou reprendre un audit ──────────────────────────────────────────
 export async function startAudit(siteCode, technicianId) {
-  const site = await Site.findOne({ code: siteCode.toUpperCase() });
-  if (!site) throw new Error(`Site ${siteCode} introuvable`);
+  const site = await Site.findOne({ code: siteCode });
+  if (!site) throw new Error("Site introuvable — vérifiez le code.");
 
-  // Verifie qu'il n'y a pas deja un audit en cours
+  const validated = await Audit.findOne({
+    site: site._id,
+    status: "validated",
+  });
+  if (validated) {
+    throw new Error(
+      "Ce site possède déjà un audit validé. Contactez un superviseur.",
+    );
+  }
+
+  const submitted = await Audit.findOne({
+    site: site._id,
+    status: "submitted",
+  });
+  if (submitted) {
+    throw new Error(
+      "Un audit est déjà soumis et en attente de validation pour ce site.",
+    );
+  }
+
   const existing = await Audit.findOne({
     site: site._id,
     status: { $in: [AUDIT_STATUS.DRAFT, AUDIT_STATUS.IN_PROGRESS] },
   });
 
-  if (existing && !site.reopenedAt) {
-    throw new Error(
-      "Un audit est deja en cours sur ce site — contactez votre superviseur pour le reouverture",
-    );
+  if (existing) {
+    existing.technician = technicianId;
+    existing.status = AUDIT_STATUS.IN_PROGRESS;
+    existing.corrections = null;
+    existing.updatedAt = new Date();
+    await existing.save();
+    await Site.findByIdAndUpdate(site._id, { status: SITE_STATUS.IN_PROGRESS });
+    return existing;
   }
 
-  // Cherche l'audit precedent pour l'historique
-  const previousAudit = await Audit.findOne({ site: site._id }).sort({
-    createdAt: -1,
-  });
-
-  // Cree le nouvel audit
-  const audit = await Audit.create({
+  const audit = new Audit({
     site: site._id,
     technician: technicianId,
     status: AUDIT_STATUS.IN_PROGRESS,
     visitDate: new Date(),
-    previousAudit: previousAudit?._id || null,
-    isReopened: !!site.reopenedAt,
-    reopenedBy: site.reopenedBy || null,
-    reopenedAt: site.reopenedAt || null,
+  });
+  await audit.save();
+  await Site.findByIdAndUpdate(site._id, { status: SITE_STATUS.IN_PROGRESS });
+
+  await notifyAdmins({
+    type: "audit_started",
+    title: "🔧 Audit démarré",
+    message: `Audit démarré sur le site ${site.name} (${siteCode})`,
+    priority: "low",
+    refModel: "Audit",
+    refId: audit._id,
+    sender: technicianId,
   });
 
-  // Met a jour le statut du site
-  await Site.findByIdAndUpdate(site._id, {
-    status: SITE_STATUS.IN_PROGRESS,
-    reopenedAt: null,
-    reopenedBy: null,
-  });
-
-  // Notifie le dashboard en temps reel
-  const populated = await audit.populate([
-    { path: "site", select: "name code zone" },
-    { path: "technician", select: "name techCode" },
-  ]);
-
-  emitAuditStarted(populated);
-
+  emitAuditStarted({ auditId: audit._id, site, technicianId });
   return audit;
 }
 
-/**
- * Recupere un audit par son ID avec tous les equipements
- */
+// ─── Récupérer un audit par ID ────────────────────────────────────────────────
 export async function getAuditById(auditId) {
   const audit = await Audit.findById(auditId)
     .populate("site")
@@ -76,19 +82,19 @@ export async function getAuditById(auditId) {
     .populate("rectifier")
     .populate("solar")
     .populate("battery")
+    .populate("compteurCIE")
     .populate("earthing")
     .populate("fuelTank")
     .populate("clientLoads")
     .populate("photos")
-    .populate("validatedBy", "name email");
+    .populate("validatedBy", "name email")
+    .populate("rejectedBy", "name email");
 
   if (!audit) throw new Error("Audit introuvable");
   return audit;
 }
 
-/**
- * Liste les audits avec filtres
- */
+// ─── Lister les audits ────────────────────────────────────────────────────────
 export async function getAudits({
   status,
   zone,
@@ -99,12 +105,10 @@ export async function getAudits({
   skip,
 }) {
   const filter = {};
-
   if (status) filter.status = status;
   if (technicianId) filter.technician = technicianId;
   if (siteId) filter.site = siteId;
 
-  // Filtre par zone via le site
   if (zone) {
     const sites = await Site.find({ zone }).select("_id");
     filter.site = { $in: sites.map((s) => s._id) };
@@ -114,8 +118,8 @@ export async function getAudits({
     Audit.find(filter)
       .populate("site", "name code city zone")
       .populate("technician", "name techCode")
-      .skip(skip)
-      .limit(limit)
+      .skip(skip || 0)
+      .limit(limit || 50)
       .sort({ createdAt: -1 }),
     Audit.countDocuments(filter),
   ]);
@@ -123,34 +127,84 @@ export async function getAudits({
   return { audits, total };
 }
 
-/**
- * Met a jour les commentaires d'un audit
- */
-export async function updateComments(auditId, technicianId, data) {
+// ─── Mes audits (technicien) ──────────────────────────────────────────────────
+export async function getMyAudits(technicianId) {
+  return Audit.find({ technician: technicianId })
+    .populate("site", "name code city zone status")
+    .sort({ updatedAt: -1 });
+}
+
+// ─── Mettre à jour section générale (commentaires + infos site) ───────────────
+export async function updateGeneralSection(auditId, technicianId, body) {
   const audit = await Audit.findOne({
     _id: auditId,
     technician: technicianId,
-    status: AUDIT_STATUS.IN_PROGRESS,
+    status: { $in: [AUDIT_STATUS.IN_PROGRESS, AUDIT_STATUS.DRAFT] },
   });
+  if (!audit) throw new Error("Audit introuvable ou non modifiable");
 
-  if (!audit) {
-    throw new Error("Audit introuvable ou non modifiable");
-  }
+  const { comments = {}, siteUpdate = {}, technicianNotes } = body;
 
-  if (data.comments) audit.comments = { ...audit.comments, ...data.comments };
-  if (data.technicianNotes) audit.technicianNotes = data.technicianNotes;
+  // 1. Commentaires audit
+  if (comments.general !== undefined) audit.comments.general = comments.general;
+  if (comments.urgent !== undefined) audit.comments.urgent = comments.urgent;
+  if (comments.access !== undefined) audit.comments.access = comments.access;
+  if (comments.generator !== undefined)
+    audit.comments.generator = comments.generator;
+  if (comments.rectifier !== undefined)
+    audit.comments.rectifier = comments.rectifier;
+  if (comments.battery !== undefined) audit.comments.battery = comments.battery;
+  if (comments.solar !== undefined) audit.comments.solar = comments.solar;
+  if (comments.earthing !== undefined)
+    audit.comments.earthing = comments.earthing;
+  if (comments.fuelTank !== undefined)
+    audit.comments.fuelTank = comments.fuelTank;
+  if (technicianNotes !== undefined) audit.technicianNotes = technicianNotes;
 
   await audit.save();
+
+  // 2. Mise à jour site
+  if (audit.site && Object.keys(siteUpdate).length > 0) {
+    const site = await Site.findById(audit.site);
+    if (site) {
+      // GPS
+      if (siteUpdate.lat && siteUpdate.lng) {
+        site.coordinates = {
+          lat: parseFloat(siteUpdate.lat),
+          lng: parseFloat(siteUpdate.lng),
+        };
+      }
+      // Accès
+      if (siteUpdate.accessLevel) site.accessLevel = siteUpdate.accessLevel;
+      if (siteUpdate.keyLocation) site.keyLocation = siteUpdate.keyLocation;
+      if (siteUpdate.accessNotes) site.accessNotes = siteUpdate.accessNotes;
+      // Clients & type
+      if (siteUpdate.clients?.length) site.clients = siteUpdate.clients;
+      if (siteUpdate.siteType) site.siteType = siteUpdate.siteType;
+      // Contact — upsert index 0
+      if (siteUpdate.contactName || siteUpdate.contactPhone) {
+        const contact = {
+          type: siteUpdate.contactType || "other",
+          name: siteUpdate.contactName || "",
+          phone: siteUpdate.contactPhone || "",
+        };
+        if (!site.contacts) site.contacts = [];
+        if (site.contacts.length > 0) {
+          site.contacts.set(0, contact);
+        } else {
+          site.contacts.push(contact);
+        }
+      }
+      await site.save();
+    }
+  }
 
   return audit;
 }
 
-/**
- * Calcule et sauvegarde le score d'un audit
- */
+// ─── Calculer le score ────────────────────────────────────────────────────────
 export async function computeAuditScore(auditId) {
   const audit = await getAuditById(auditId);
-
   const { score, level, label } = getScoreSummary(audit);
 
   await Audit.findByIdAndUpdate(auditId, {
@@ -158,7 +212,6 @@ export async function computeAuditScore(auditId) {
     criticalityLevel: level,
   });
 
-  // Met à jour lastAuditScore et lastAuditDate sur le site
   await Site.findByIdAndUpdate(audit.site._id, {
     lastAuditScore: score,
     lastAuditDate: new Date(),
@@ -166,11 +219,10 @@ export async function computeAuditScore(auditId) {
 
   if (level === "critical" || level === "high") {
     emitCriticalAlert({ auditId, site: audit.site, score, level, label });
-
     await notifyAdmins({
       type: "alert_critical",
       title: `⚠️ Alerte ${level === "critical" ? "CRITIQUE" : "HAUTE"} — ${audit.site.code}`,
-      message: `Score ${score}/100 détecté sur le site ${audit.site.code} — ${audit.site.name}. Intervention requise.`,
+      message: `Score ${score}/100 sur le site ${audit.site.code} — ${audit.site.name}. Intervention requise.`,
       priority: level === "critical" ? "critical" : "high",
       refModel: "Audit",
       refId: auditId,
@@ -180,64 +232,44 @@ export async function computeAuditScore(auditId) {
   return { score, level, label };
 }
 
-/**
- * Soumet un audit pour validation
- */
-/**
- * Soumet un audit pour validation
- */
+// ─── Soumettre un audit ───────────────────────────────────────────────────────
 export async function submitAudit(auditId, technicianId, notes) {
   const audit = await Audit.findOne({
     _id: auditId,
     technician: technicianId,
-    status: AUDIT_STATUS.IN_PROGRESS,
+    status: { $in: [AUDIT_STATUS.IN_PROGRESS, AUDIT_STATUS.DRAFT] },
   });
-
-  if (!audit) {
-    throw new Error("Audit introuvable ou deja soumis");
-  }
+  if (!audit) throw new Error("Audit introuvable ou déjà soumis");
 
   if (notes) audit.technicianNotes = notes;
-
   audit.status = AUDIT_STATUS.SUBMITTED;
   audit.submittedAt = new Date();
-
+  audit.corrections = null;
   await audit.save();
 
-  // Met à jour le site
-  await Site.findByIdAndUpdate(audit.site, {
-    status: SITE_STATUS.COMPLETED,
-  });
+  await Site.findByIdAndUpdate(audit.site, { status: SITE_STATUS.COMPLETED });
 
-  // Populate pour les notifications et les events
   const populated = await Audit.findById(auditId)
     .populate("site", "name code zone city")
     .populate("technician", "name techCode zone");
 
-  const site = populated.site;
-  const technician = populated.technician;
-
-  // ── NOTIFICATIONS ADMINS ─────────────────────────────────
   await notifyAdmins({
     type: "audit_submitted",
     title: "📋 Audit soumis — validation requise",
-    message: `${technician.name} (${technician.techCode}) a soumis l'audit du site ${site.code} — ${site.name} (${site.city})`,
+    message: `${populated.technician.name} (${populated.technician.techCode}) a soumis l'audit du site ${populated.site.code} — ${populated.site.name} (${populated.site.city})`,
     priority: "high",
     refModel: "Audit",
     refId: audit._id,
     sender: technicianId,
   });
 
-  // ── WEBSOCKET ────────────────────────────────────────────
   emitAuditSubmitted(populated);
   emitSiteUpdated({ siteId: audit.site, status: SITE_STATUS.COMPLETED });
 
   return audit;
 }
 
-/**
- * Valide un audit (admin ou superviseur)
- */
+// ─── Valider un audit ─────────────────────────────────────────────────────────
 export async function validateAudit(auditId, validatorId) {
   const audit = await Audit.findOneAndUpdate(
     { _id: auditId, status: AUDIT_STATUS.SUBMITTED },
@@ -246,36 +278,126 @@ export async function validateAudit(auditId, validatorId) {
         status: AUDIT_STATUS.VALIDATED,
         validatedAt: new Date(),
         validatedBy: validatorId,
+        corrections: null,
       },
     },
-    { new: true },
+    { returnDocument: "after" }, // ← Mongoose 7+
   );
+  if (!audit) throw new Error("Audit introuvable ou non soumis");
 
-  if (!audit) {
-    throw new Error("Audit introuvable ou non soumis");
-  }
-
-  // Incremente le compteur d'audits du site
   await Site.findByIdAndUpdate(audit.site, {
+    status: SITE_STATUS.COMPLETED,
     $inc: { auditCount: 1 },
   });
 
-  // Après la mise à jour, ajoute :
-  const auditPopulated = await Audit.findById(auditId)
+  const populated = await Audit.findById(auditId)
     .populate("site", "name code city")
     .populate("technician", "name techCode");
 
-  // Notifie le technicien que son audit est validé
   await createNotification({
-    recipient: auditPopulated.technician._id,
+    recipient: populated.technician._id,
     type: "audit_validated",
     title: "✅ Audit validé",
-    message: `Votre audit du site ${auditPopulated.site.code} — ${auditPopulated.site.name} a été validé`,
+    message: `Votre audit du site ${populated.site.code} — ${populated.site.name} a été validé`,
     priority: "medium",
     refModel: "Audit",
     refId: auditId,
     sender: validatorId,
   });
 
+  emitSiteUpdated({ siteId: audit.site, status: SITE_STATUS.COMPLETED });
+  return audit;
+}
+
+// ─── Refuser un audit ─────────────────────────────────────────────────────────
+export async function rejectAudit(auditId, adminId, corrections) {
+  if (!corrections?.trim())
+    throw new Error("Vous devez indiquer les corrections à effectuer");
+
+  const audit = await Audit.findOne({
+    _id: auditId,
+    status: AUDIT_STATUS.SUBMITTED,
+  });
+  if (!audit) throw new Error("Audit introuvable ou non soumis");
+
+  audit.status = AUDIT_STATUS.IN_PROGRESS;
+  audit.corrections = corrections;
+  audit.rejectedAt = new Date();
+  audit.rejectedBy = adminId;
+  await audit.save();
+
+  await Site.findByIdAndUpdate(audit.site, { status: SITE_STATUS.IN_PROGRESS });
+
+  const populated = await Audit.findById(auditId)
+    .populate("site", "name code city")
+    .populate("technician", "name techCode");
+
+  await createNotification({
+    recipient: populated.technician._id,
+    type: "audit_rejected",
+    title: "❌ Audit refusé — corrections requises",
+    message: `Votre audit du site ${populated.site.code} — ${populated.site.name} a été refusé. Corrections : ${corrections}`,
+    priority: "high",
+    refModel: "Audit",
+    refId: auditId,
+    sender: adminId,
+  });
+
+  emitSiteUpdated({ siteId: audit.site, status: SITE_STATUS.IN_PROGRESS });
+  return audit;
+}
+
+// ─── Supprimer un audit (admin) ───────────────────────────────────────────────
+export async function deleteAudit(auditId) {
+  const audit = await Audit.findById(auditId).populate("site");
+  if (!audit) throw new Error("Audit introuvable");
+
+  const mongoose = await import("mongoose");
+  const collections = [
+    "Generator",
+    "Rectifier",
+    "Battery",
+    "SolarSystem",
+    "FuelTank",
+    "Earthing",
+    "CompteurCIE",
+    "ClientLoad",
+    "Photo",
+  ];
+
+  await Promise.all(
+    collections.map((modelName) => {
+      try {
+        const Model = mongoose.default.model(modelName);
+        return Model.deleteMany({ audit: auditId });
+      } catch (e) {
+        return Promise.resolve();
+      }
+    }),
+  );
+
+  await Site.findByIdAndUpdate(audit.site._id, { status: SITE_STATUS.PENDING });
+  const siteCode = audit.site?.code;
+  await Audit.findByIdAndDelete(auditId);
+
+  return { deleted: true, siteCode };
+}
+
+// ─── Réouvrir un audit (admin) ────────────────────────────────────────────────
+export async function reopenAudit(auditId, adminId, reason) {
+  const audit = await Audit.findOne({
+    _id: auditId,
+    status: AUDIT_STATUS.VALIDATED,
+  });
+  if (!audit) throw new Error("Seul un audit validé peut être réouvert");
+
+  audit.status = AUDIT_STATUS.IN_PROGRESS;
+  audit.isReopened = true;
+  audit.reopenedBy = adminId;
+  audit.reopenedAt = new Date();
+  audit.reopenReason = reason;
+  await audit.save();
+
+  await Site.findByIdAndUpdate(audit.site, { status: SITE_STATUS.IN_PROGRESS });
   return audit;
 }

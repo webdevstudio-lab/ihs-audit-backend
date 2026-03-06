@@ -45,6 +45,8 @@ export const BATTERY_VOLTAGE = {
   V2: 2,
   V6: 6,
   V12: 12,
+  V24: 24,
+  V48: 48,
 };
 
 export const PHOTO_CATEGORY = {

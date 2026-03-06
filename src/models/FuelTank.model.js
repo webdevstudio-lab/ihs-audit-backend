@@ -90,13 +90,13 @@ const fuelTankSchema = new mongoose.Schema(
 );
 
 // Calcul automatique du niveau en litres
-fuelTankSchema.pre("save", function (next) {
+fuelTankSchema.pre("save", function () {
+  // ← supprimer "next"
   if (this.capacityLiters && this.fuelLevel !== undefined) {
     this.fuelLevelLiters = Math.round(
       (this.fuelLevel / 100) * this.capacityLiters,
     );
   }
-  next();
 });
 
 export const FuelTank = mongoose.model("FuelTank", fuelTankSchema);

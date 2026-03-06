@@ -9,7 +9,6 @@ const auditSchema = new mongoose.Schema(
       ref: "Site",
       required: [true, "Site obligatoire"],
     },
-
     technician: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -19,22 +18,13 @@ const auditSchema = new mongoose.Schema(
     // ── STATUT ───────────────────────────────────────────────
     status: {
       type: String,
-      enum: Object.values(AUDIT_STATUS),
+      enum: ["draft", "in_progress", "submitted", "validated", "rejected"],
       default: AUDIT_STATUS.DRAFT,
     },
-
-    visitDate: {
-      type: Date,
-      default: Date.now,
-    },
+    visitDate: { type: Date, default: Date.now },
 
     // ── SCORE ────────────────────────────────────────────────
-    globalScore: {
-      type: Number,
-      min: 0,
-      max: 100,
-    },
-
+    globalScore: { type: Number, min: 0, max: 100 },
     criticalityLevel: {
       type: String,
       enum: ["excellent", "normal", "elevated", "high", "critical", "unknown"],
@@ -48,68 +38,22 @@ const auditSchema = new mongoose.Schema(
     compteurCIE: { type: mongoose.Schema.Types.ObjectId, ref: "CompteurCIE" },
     earthing: { type: mongoose.Schema.Types.ObjectId, ref: "Earthing" },
     fuelTank: { type: mongoose.Schema.Types.ObjectId, ref: "FuelTank" },
-
     clientLoads: [{ type: mongoose.Schema.Types.ObjectId, ref: "ClientLoad" }],
-
     photos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Photo" }],
 
-    // ── COMMENTAIRES TECHNICIEN ───────────────────────────────
-    // Chaque section a sa propre zone de commentaire
+    // ── COMMENTAIRES PAR SECTION ─────────────────────────────
     comments: {
-      // Observations generales sur le site
-      general: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur le generateur
-      generator: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur le rectifier
-      rectifier: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur les batteries
-      battery: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur les panneaux solaires
-      solar: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur la prise de terre
-      earthing: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes signales sur le tank carburant
-      fuelTank: {
-        type: String,
-        trim: true,
-      },
-
-      // Problemes d'acces au site (portail ferme, route coupee...)
-      access: {
-        type: String,
-        trim: true,
-      },
-
-      // Signalement urgent — remonte immediatement au superviseur
-      urgent: {
-        type: String,
-        trim: true,
-      },
+      general: { type: String, trim: true },
+      generator: { type: String, trim: true },
+      rectifier: { type: String, trim: true },
+      battery: { type: String, trim: true },
+      solar: { type: String, trim: true },
+      earthing: { type: String, trim: true },
+      fuelTank: { type: String, trim: true },
+      access: { type: String, trim: true },
+      urgent: { type: String, trim: true },
     },
+    technicianNotes: { type: String, trim: true },
 
     // ── ANALYSE IA ───────────────────────────────────────────
     iaAnalysis: {
@@ -117,33 +61,22 @@ const auditSchema = new mongoose.Schema(
       recommendations: [String],
       summary: String,
     },
+    iaReport: { type: String },
 
-    iaReport: {
-      type: String,
+    // ── CORRECTIONS (refus admin) ─────────────────────────────
+    corrections: { type: String, trim: true, default: null },
+    rejectedAt: { type: Date, default: null },
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     // ── REPRISE D'AUDIT ──────────────────────────────────────
-    isReopened: {
-      type: Boolean,
-      default: false,
-    },
-
-    reopenedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-
-    reopenedAt: {
-      type: Date,
-    },
-
-    reopenReason: {
-      type: String,
-      trim: true,
-    },
-
-    compteurCIE: { type: String, trim: true },
-
+    isReopened: { type: Boolean, default: false },
+    reopenedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reopenedAt: { type: Date },
+    reopenReason: { type: String, trim: true },
     previousAudit: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Audit",
@@ -152,18 +85,14 @@ const auditSchema = new mongoose.Schema(
     // ── VALIDATION ───────────────────────────────────────────
     submittedAt: { type: Date },
     validatedAt: { type: Date },
-
     validatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-// Index
 auditSchema.index({ site: 1 });
 auditSchema.index({ technician: 1 });
 auditSchema.index({ status: 1 });

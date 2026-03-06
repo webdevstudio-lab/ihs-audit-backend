@@ -58,7 +58,7 @@ export async function saveEquipment(auditId, technicianId, type, data) {
     equipment = await Model.findByIdAndUpdate(
       audit[type],
       { $set: data },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
   } else {
     // Création + liaison audit

@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// Demarrer un audit — le technicien saisit le code du site
 export const startAuditSchema = z.object({
   siteCode: z
     .string({ required_error: "Code site obligatoire" })
@@ -9,7 +8,6 @@ export const startAuditSchema = z.object({
     .min(3, "Code site invalide"),
 });
 
-// Mettre a jour les commentaires d'un audit
 export const updateCommentsSchema = z.object({
   comments: z
     .object({
@@ -26,17 +24,38 @@ export const updateCommentsSchema = z.object({
     .optional(),
 
   technicianNotes: z.string().trim().optional(),
+
+  // ← AJOUT : infos site depuis section générale mobile
+  siteUpdate: z
+    .object({
+      lat: z.string().optional(),
+      lng: z.string().optional(),
+      accessLevel: z.string().optional(),
+      keyLocation: z.string().optional(),
+      accessNotes: z.string().optional(),
+      contactType: z.string().optional(),
+      contactName: z.string().optional(),
+      contactPhone: z.string().optional(),
+      clients: z.array(z.string()).optional(),
+      siteType: z.string().optional(),
+    })
+    .optional(),
 });
 
-// Soumettre un audit (validation finale)
 export const submitAuditSchema = z.object({
   technicianNotes: z.string().trim().optional(),
 });
 
-// Reouverture d'un audit (admin ou superviseur uniquement)
+export const rejectAuditSchema = z.object({
+  corrections: z
+    .string({ required_error: "Les corrections sont obligatoires" })
+    .trim()
+    .min(10, "Décrivez les corrections (10 caractères minimum)"),
+});
+
 export const reopenAuditSchema = z.object({
   reason: z
-    .string({ required_error: "Raison de reouverture obligatoire" })
+    .string({ required_error: "Raison de réouverture obligatoire" })
     .trim()
-    .min(10, "Raison trop courte (10 caracteres min)"),
+    .min(10, "Raison trop courte (10 caractères minimum)"),
 });

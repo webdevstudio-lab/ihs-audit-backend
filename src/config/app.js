@@ -1,3 +1,4 @@
+// app.js — version corrigée
 import { Elysia } from "elysia";
 import { corsPlugin } from "../plugins/cors.plugin.js";
 import { jwtPlugin } from "../plugins/jwt.plugin.js";
@@ -12,31 +13,25 @@ import {
 } from "../middleware/security.middleware.js";
 import { loggerMiddleware } from "../middleware/logger.middleware.js";
 
+// ← SUPPRIMÉ : le app.use() orphelin qui causait "app is not defined"
+
 export function createApp() {
   const app = new Elysia()
-    // ── CORS EN PREMIER — avant tout middleware ───────────────
     .use(corsPlugin)
-    // ── SECURITE ─────────────────────────────────────────────
     .use(securityMiddleware)
     .use(sanitizeMiddleware)
-    // ── PLUGINS ──────────────────────────────────────────────
     .use(jwtPlugin)
     .use(swaggerPlugin)
     .use(storagePlugin)
-    // ── WEBSOCKET ────────────────────────────────────────────
     .use(websocketPlugin)
-    // ── FICHIERS STATIQUES ───────────────────────────────────
     .use(
       staticPlugin({
         assets: "uploads",
         prefix: "/uploads",
       }),
     )
-    // ── LOGS ─────────────────────────────────────────────────
     .use(loggerMiddleware)
-    // ── ROUTES ───────────────────────────────────────────────
     .use(routes)
-    // ── HEALTH CHECK ─────────────────────────────────────────
     .get("/health", () => ({
       status: "ok",
       app: "IHS Audit API",
@@ -69,5 +64,6 @@ export function createApp() {
         code: 500,
       };
     });
+
   return app;
 }

@@ -64,6 +64,14 @@ const batterySchema = new mongoose.Schema(
       type: Number,
     },
 
+    waterLevel: {
+      type: String,
+      enum: ["ok", "low", "critical", "unknown", "not_applicable"],
+      default: "not_applicable",
+    },
+    lastWaterRefillDate: { type: Date },
+    totalElements: { type: Number }, // calculé auto : strings × elementsParString
+
     // ── ETAT GENERAL ────────────────────────────────────────
     condition: {
       type: String,
@@ -144,7 +152,8 @@ const batterySchema = new mongoose.Schema(
 );
 
 // Calcul automatique du nombre total d'elements avant sauvegarde
-batterySchema.pre("save", function (next) {
+batterySchema.pre("save", function () {
+  // ← supprimer next
   if (this.numberOfStrings && this.numberOfElementsPerString) {
     this.totalElements = this.numberOfStrings * this.numberOfElementsPerString;
   }

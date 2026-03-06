@@ -1,53 +1,72 @@
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/jpg",
+];
 
-/**
- * Valide un fichier uploade avant traitement
- * Verifie la taille et le type MIME
- */
 export const uploadMiddleware = (app) =>
-  app.derive(async ({ request, set }) => {
-    const contentType = request.headers.get("content-type") || "";
+  app
+    // 1. Dire à Elysia de parser le body en formdata ET d'exposer le body brut
+    .onBeforeHandle({ as: "scoped" }, async ({ request, set, store }) => {
+      const contentType = request.headers.get("content-type") || "";
+      if (!contentType.includes("multipart/form-data")) return;
 
-    // On ne traite que les requetes multipart (upload de fichiers)
-    if (!contentType.includes("multipart/form-data")) {
-      return {};
-    }
+      let formData;
+      try {
+        formData = await request.formData();
+      } catch (e) {
+        console.error("[UPLOAD] formData error →", e.message);
+        set.status = 400;
+        return { success: false, message: "Impossible de lire le fichier" };
+      }
 
-    const formData = await request.formData();
-    const file = formData.get("photo");
+      const file = formData.get("photo");
 
-    if (!file) {
-      return {};
-    }
+      if (!file || typeof file === "string") {
+        set.status = 400;
+        return { success: false, message: "Champ 'photo' manquant" };
+      }
 
-    // Verifie la taille
-    if (file.size > MAX_SIZE_BYTES) {
-      set.status = 413;
-      throw new Error(
-        `Fichier trop volumineux : ${(file.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`,
-      );
-    }
+      if (file.size > MAX_SIZE_BYTES) {
+        set.status = 413;
+        return {
+          success: false,
+          message: `Fichier trop volumineux : ${(file.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`,
+        };
+      }
 
-    // Verifie le type MIME
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      set.status = 415;
-      throw new Error(
-        `Type de fichier non accepte : ${file.type}. Acceptes : ${ALLOWED_TYPES.join(", ")}`,
-      );
-    }
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        set.status = 415;
+        return { success: false, message: `Type non accepté : ${file.type}` };
+      }
 
-    // Convertit le fichier en Buffer pour sharp
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-    // Injecte le fichier valide dans le contexte
-    return {
-      uploadedFile: {
+      // Stocker dans le store Elysia — accessible dans tous les handlers
+      store.uploadedFile = {
         buffer,
-        name: file.name,
-        mimeType: file.type,
+        name: file.name || `photo_${Date.now()}.jpg`,
+        mimeType: file.type || "image/jpeg",
         size: file.size,
-      },
-    };
-  });
+      };
+
+      // Stocker aussi les autres champs du formdata dans le store
+      store.formFields = {
+        category: formData.get("category") || "general",
+        caption: formData.get("caption") || "",
+        lat: formData.get("lat"),
+        lng: formData.get("lng"),
+      };
+
+      console.log(
+        "[UPLOAD] fichier ok →",
+        file.name,
+        file.type,
+        buffer.length,
+        "bytes",
+      );
+    });

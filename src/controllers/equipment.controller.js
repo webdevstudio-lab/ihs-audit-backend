@@ -85,4 +85,19 @@ export const equipmentController = {
       return error(err.message);
     }
   },
+
+  // POST /equipment/:auditId/client-load
+  async saveClientLoad(ctx) {
+    try {
+      const { auditId } = ctx.params;
+      const data = ctx.body; // { client: "MTN", btsCount, measuredCurrentAmps, ... }
+
+      const result = await saveClientLoad(auditId, ctx.user._id, data);
+      ctx.set.status = 201;
+      return success(result, "Charge client sauvegardée");
+    } catch (err) {
+      ctx.set.status = 400;
+      return error(err.message);
+    }
+  },
 };

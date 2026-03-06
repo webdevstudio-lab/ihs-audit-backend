@@ -18,6 +18,7 @@ import { AUDIT_STATUS } from "../config/constants.js";
  * @param {string} caption      - Description courte
  * @param {Object} coordinates  - { lat, lng } optionnel
  */
+// photo.service.js — dans uploadPhoto(), remplacez le bloc principal par :
 export async function uploadPhoto(
   auditId,
   technicianId,
@@ -26,69 +27,78 @@ export async function uploadPhoto(
   caption = "",
   coordinates = null,
 ) {
-  // Verifie que l'audit est modifiable
-  const audit = await Audit.findOne({
-    _id: auditId,
-    technician: technicianId,
-    status: AUDIT_STATUS.IN_PROGRESS,
-  }).populate("site", "code");
+  try {
+    const audit = await Audit.findOne({
+      _id: auditId,
+      technician: technicianId,
+      status: { $in: [AUDIT_STATUS.IN_PROGRESS, AUDIT_STATUS.DRAFT] },
+    }).populate("site", "code");
 
-  if (!audit) {
-    throw new Error("Audit introuvable ou non modifiable");
+    if (!audit) throw new Error("Audit introuvable ou non modifiable");
+
+    console.log("[PHOTO] audit ok →", audit._id);
+    console.log("[PHOTO] uploadedFile →", {
+      name: uploadedFile?.name,
+      mimeType: uploadedFile?.mimeType,
+      size: uploadedFile?.size,
+      hasBuffer: !!uploadedFile?.buffer,
+      bufferLen: uploadedFile?.buffer?.length,
+    });
+
+    const siteCode = audit.site.code;
+    const compressed = await compressIfNeeded(
+      uploadedFile.buffer,
+      uploadedFile.mimeType,
+    );
+    console.log("[PHOTO] compressed ok →", compressed?.length, "bytes");
+
+    const thumbnail = await generateThumbnail(compressed);
+    console.log("[PHOTO] thumbnail ok");
+
+    const meta = await getImageMetadata(compressed);
+    const fileKey = buildFileKey(
+      siteCode,
+      auditId,
+      category,
+      uploadedFile.name,
+    );
+    const thumbKey = buildFileKey(
+      siteCode,
+      auditId,
+      `${category}_thumb`,
+      uploadedFile.name,
+    );
+
+    console.log("[PHOTO] uploading to storage →", fileKey);
+    const [url, thumbnailUrl] = await Promise.all([
+      uploadFile(fileKey, compressed, uploadedFile.mimeType),
+      uploadFile(thumbKey, thumbnail, "image/jpeg"),
+    ]);
+    console.log("[PHOTO] storage ok →", url);
+
+    const photo = await Photo.create({
+      audit: auditId,
+      takenBy: technicianId,
+      filename: fileKey,
+      url,
+      thumbnailUrl,
+      sizeBytes: meta.sizeBytes,
+      mimeType: uploadedFile.mimeType,
+      category,
+      caption,
+      coordinates,
+      takenAt: new Date(),
+    });
+
+    await Audit.findByIdAndUpdate(auditId, { $push: { photos: photo._id } });
+    return photo;
+  } catch (err) {
+    // ← CE LOG VA APPARAÎTRE DANS VOTRE TERMINAL SERVEUR
+    console.error("[PHOTO SERVICE ERROR]", err.message);
+    console.error(err.stack);
+    throw err;
   }
-
-  const siteCode = audit.site.code;
-
-  // 1. Compresse si necessaire (filet securite serveur)
-  const compressed = await compressIfNeeded(
-    uploadedFile.buffer,
-    uploadedFile.mimeType,
-  );
-
-  // 2. Genere la miniature
-  const thumbnail = await generateThumbnail(compressed);
-
-  // 3. Lit les metadonnees
-  const meta = await getImageMetadata(compressed);
-
-  // 4. Genere les cles MinIO
-  const fileKey = buildFileKey(siteCode, auditId, category, uploadedFile.name);
-  const thumbKey = buildFileKey(
-    siteCode,
-    auditId,
-    `${category}_thumb`,
-    uploadedFile.name,
-  );
-
-  // 5. Upload sur MinIO (original + miniature en parallele)
-  const [url, thumbnailUrl] = await Promise.all([
-    uploadFile(fileKey, compressed, uploadedFile.mimeType),
-    uploadFile(thumbKey, thumbnail, "image/jpeg"),
-  ]);
-
-  // 6. Sauvegarde les metadonnees en base
-  const photo = await Photo.create({
-    audit: auditId,
-    takenBy: technicianId,
-    filename: fileKey,
-    url,
-    thumbnailUrl,
-    sizeBytes: meta.sizeBytes,
-    mimeType: uploadedFile.mimeType,
-    category,
-    caption,
-    coordinates,
-    takenAt: new Date(),
-  });
-
-  // 7. Lie la photo a l'audit
-  await Audit.findByIdAndUpdate(auditId, {
-    $push: { photos: photo._id },
-  });
-
-  return photo;
 }
-
 /**
  * Recupere toutes les photos d'un audit
  * Peut filtrer par categorie

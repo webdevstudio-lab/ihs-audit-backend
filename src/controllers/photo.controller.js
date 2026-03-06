@@ -6,14 +6,13 @@ import {
 import { success, error } from "../utils/response.js";
 
 export const photoController = {
-  // POST /photos/:auditId
   async upload(ctx) {
     try {
       const { auditId } = ctx.params;
-      const { category, caption } = ctx.body || {};
-      const { uploadedFile } = ctx;
+      const uploadedFile = ctx.uploadedFile; // ← injecté par la route
+      const category = ctx.body?.category || "general";
+      const caption = ctx.body?.caption || "";
 
-      // Coordonnees GPS optionnelles
       const coordinates =
         ctx.body?.lat && ctx.body?.lng
           ? { lat: parseFloat(ctx.body.lat), lng: parseFloat(ctx.body.lng) }
@@ -21,33 +20,33 @@ export const photoController = {
 
       if (!uploadedFile) {
         ctx.set.status = 400;
-        return error("Aucun fichier recu");
+        return error("Aucun fichier reçu");
       }
 
       const photo = await uploadPhoto(
         auditId,
         ctx.user._id,
         uploadedFile,
-        category || "general",
-        caption || "",
+        category,
+        caption,
         coordinates,
       );
 
       ctx.set.status = 201;
-      return success(photo, "Photo uploadee avec succes");
+      return success(photo, "Photo uploadée avec succès");
     } catch (err) {
-      ctx.set.status = 400;
+      console.error("[PHOTO UPLOAD ERROR]", err.message, err.stack);
+      ctx.set.status = err.message?.includes("introuvable") ? 404 : 500;
       return error(err.message);
     }
   },
 
-  // GET /photos/:auditId
   async list(ctx) {
     try {
-      const { auditId } = ctx.params;
-      const { category } = ctx.query;
-
-      const photos = await getAuditPhotos(auditId, category);
+      const photos = await getAuditPhotos(
+        ctx.params.auditId,
+        ctx.query?.category,
+      );
       return success(photos);
     } catch (err) {
       ctx.set.status = 400;
@@ -55,11 +54,10 @@ export const photoController = {
     }
   },
 
-  // DELETE /photos/:photoId
   async remove(ctx) {
     try {
       const result = await deletePhoto(ctx.params.photoId, ctx.user._id);
-      return success(result, "Photo supprimee");
+      return success(result, "Photo supprimée");
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);
