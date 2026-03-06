@@ -137,4 +137,37 @@ export const statsController = {
       return error(err.message);
     }
   },
+
+  // GET /stats/equipment
+  async equipment(ctx) {
+    try {
+      const { getEquipmentStats } =
+        await import("../services/stats.service.js");
+      const data = await getEquipmentStats();
+      return success(data);
+    } catch (err) {
+      ctx.set.status = 400;
+      return error(err.message);
+    }
+  },
+
+  // GET /stats/equipment/search?type=rectifier&brand=Delta&condition=poor
+  async equipmentSearch(ctx) {
+    try {
+      const { type, brand, condition } = ctx.query;
+      if (!type) {
+        ctx.set.status = 400;
+        return error(
+          "Le paramètre 'type' est obligatoire (generator|rectifier|battery|solar)",
+        );
+      }
+      const { getSitesByEquipment } =
+        await import("../services/stats.service.js");
+      const sites = await getSitesByEquipment({ type, brand, condition });
+      return success(sites);
+    } catch (err) {
+      ctx.set.status = 400;
+      return error(err.message);
+    }
+  },
 };

@@ -34,4 +34,12 @@ export const iaRoutes = new Elysia({ prefix: "/ia" })
       tags: ["IA"],
       summary: "Chat IA contextuel sur un audit",
     },
+  })
+
+  // Analyse IA globale des statistiques
+  .post("/stats-query", (ctx) => iaController.statsQuery(ctx), {
+    detail: {
+      tags: ["IA"],
+      summary: "Analyse IA des statistiques globales du parc",
+    },
   });

@@ -96,4 +96,21 @@ export const statsRoutes = new Elysia({ prefix: "/stats" })
       tags: ["Stats"],
       summary: "Statistiques d'un technicien",
     },
+  })
+
+  // ── STATS ÉQUIPEMENTS ─────────────────────────────────
+  .get("/equipment", (ctx) => statsController.equipment(ctx), {
+    detail: {
+      tags: ["Stats"],
+      summary: "Stats équipements par marque/condition",
+    },
+  })
+
+  // ── SITES PAR ÉQUIPEMENT ──────────────────────────────
+  .get("/equipment/search", (ctx) => statsController.equipmentSearch(ctx), {
+    detail: {
+      tags: ["Stats"],
+      summary:
+        "Sites utilisant un équipement spécifique — ?type=rectifier&brand=Delta",
+    },
   });

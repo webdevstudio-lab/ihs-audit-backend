@@ -1,12 +1,28 @@
+// index.js
 import { createApp } from "./src/config/app.js";
 import { connectDB } from "./src/config/database.js";
 import { ENV } from "./src/config/env.js";
 
 async function main() {
-  await connectDB();
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      await connectDB();
+      break;
+    } catch (err) {
+      retries--;
+      if (retries === 0) {
+        console.error("❌ Impossible de se connecter à MongoDB");
+        process.exit(1);
+      }
+      console.warn(
+        `⚠ Retry dans 3s... (${retries} restant${retries > 1 ? "s" : ""})`,
+      );
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
 
   const app = createApp();
-
   app.listen(ENV.PORT, () => {
     console.log("");
     console.log("========================================");
@@ -21,6 +37,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Erreur demarrage serveur:", err);
+  console.error("❌ Erreur démarrage:", err.message);
   process.exit(1);
 });

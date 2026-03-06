@@ -2,6 +2,7 @@ import {
   runAuditAnalysis,
   generateAuditReport,
   chatWithAudit,
+  chatWithStats,
 } from "../services/ia.service.js";
 import { success, error } from "../utils/response.js";
 
@@ -45,6 +46,30 @@ export const iaController = {
       );
 
       return success({ response }, "Reponse IA");
+    } catch (err) {
+      ctx.set.status = 400;
+      return error(err.message);
+    }
+  },
+
+  // POST /ia/stats-query
+  async statsQuery(ctx) {
+    try {
+      const { question, statsData } = ctx.body;
+
+      if (!question || typeof question !== "string" || question.trim() === "") {
+        ctx.set.status = 400;
+        return error("La question est obligatoire");
+      }
+
+      if (!statsData || typeof statsData !== "object") {
+        ctx.set.status = 400;
+        return error("Les donnees de stats sont obligatoires");
+      }
+
+      const { chatWithStats } = await import("../services/ia.service.js");
+      const response = await chatWithStats(question.trim(), statsData);
+      return success({ response }, "Analyse IA terminee");
     } catch (err) {
       ctx.set.status = 400;
       return error(err.message);

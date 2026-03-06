@@ -146,3 +146,50 @@ function sanitizeEquipment(equipment) {
   delete obj.updatedAt;
   return obj;
 }
+
+/**
+ * Analyse de statistiques globales via IA
+ * @param {string} question - La question de l'utilisateur
+ * @param {Object} statsData - Les données de stats chargées
+ */
+export async function chatWithStats(question, statsData) {
+  const systemPrompt = `
+    Tu es STATSBOT, expert en analyse d'infrastructure telecom pour IPT PowerTech en Cote d'Ivoire.
+    Tu reponds en francais, de facon claire, concise et professionnelle.
+    Tu analyses des statistiques globales de sites telecom (antennes) audites.
+    Tu fournis des insights, des tendances et des recommandations basees sur les donnees reelles.
+    Quand tu cites des chiffres, sois precis. Sois direct et actionnable.
+    Maximum 300 mots par reponse.
+  `;
+
+  const contextPrompt = `
+    Voici les donnees statistiques actuelles du parc de sites IPT PowerTech :
+
+    === DONNEES GLOBALES ===
+    ${JSON.stringify(statsData.global ?? {}, null, 2)}
+
+    === PAR CLIENT (MTN / Orange / Moov) ===
+    ${JSON.stringify(statsData.clients ?? [], null, 2)}
+
+    === PAR ZONE GEOGRAPHIQUE ===
+    ${JSON.stringify(statsData.zones ?? [], null, 2)}
+
+    === PAR TYPOLOGIE ENERGETIQUE ===
+    ${JSON.stringify(statsData.typology ?? [], null, 2)}
+
+    === MATRICE DE CRITICITE ===
+    ${JSON.stringify(statsData.criticality ?? [], null, 2)}
+
+    === QUESTION DE L'UTILISATEUR ===
+    ${question}
+
+    Reponds directement a la question en t'appuyant sur les donnees ci-dessus.
+    Si une donnee manque pour repondre precisement, dis-le clairement.
+  `;
+
+  return chatGemini(
+    [{ role: "user", content: contextPrompt }],
+    systemPrompt,
+    1500,
+  );
+}

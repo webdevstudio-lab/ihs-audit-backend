@@ -14,7 +14,7 @@ export const ENV = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "30d",
 
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
-  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.0-flash",
 
   STORAGE: process.env.STORAGE || "local",
 
