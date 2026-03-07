@@ -76,7 +76,10 @@ export async function startAudit(siteCode, technicianId) {
 // ─── Récupérer un audit par ID ────────────────────────────────────────────────
 export async function getAuditById(auditId) {
   const audit = await Audit.findById(auditId)
-    .populate("site")
+    .populate({
+      path: "site",
+      populate: { path: "photos" }, // ← photos du site (step général)
+    })
     .populate("technician", "name techCode zone")
     .populate("generator")
     .populate("rectifier")
@@ -365,6 +368,9 @@ export async function deleteAudit(auditId) {
     "Photo",
   ];
 
+  // Récupère les IDs des photos de cet audit avant suppression
+  const photoIds = audit.photos || [];
+
   await Promise.all(
     collections.map((modelName) => {
       try {
@@ -375,6 +381,13 @@ export async function deleteAudit(auditId) {
       }
     }),
   );
+
+  // ← Retire les photos du site liées à cet audit
+  if (photoIds.length > 0) {
+    await Site.findByIdAndUpdate(audit.site._id, {
+      $pull: { photos: { $in: photoIds } },
+    });
+  }
 
   await Site.findByIdAndUpdate(audit.site._id, { status: SITE_STATUS.PENDING });
   const siteCode = audit.site?.code;

@@ -69,11 +69,9 @@ export async function getSites({
  * Recupere un site par son code
  */
 export async function getSiteByCode(code) {
-  const site = await Site.findOne({ code: code.toUpperCase() }).populate(
-    "assignedTechnician",
-    "name techCode",
-  );
-
+  const site = await Site.findOne({ code: code.toUpperCase() })
+    .populate("assignedTechnician", "name techCode")
+    .populate("photos"); // ← nouveau
   if (!site) throw new Error(`Site ${code} introuvable`);
   return site;
 }
@@ -82,11 +80,9 @@ export async function getSiteByCode(code) {
  * Recupere un site par son ID
  */
 export async function getSiteById(id) {
-  const site = await Site.findById(id).populate(
-    "assignedTechnician",
-    "name techCode",
-  );
-
+  const site = await Site.findById(id)
+    .populate("assignedTechnician", "name techCode")
+    .populate("photos"); // ← nouveau
   if (!site) throw new Error("Site introuvable");
   return site;
 }

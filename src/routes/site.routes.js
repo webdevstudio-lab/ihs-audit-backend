@@ -69,4 +69,8 @@ export const siteRoutes = new Elysia({ prefix: "/sites" })
       tags: ["Sites"],
       summary: "Supprimer un site — admin uniquement",
     },
+  })
+
+  .get("/equipment-filter", (ctx) => siteController.filterByEquipment(ctx), {
+    detail: { tags: ["Sites"], summary: "Filtrer sites par équipement/marque" },
   });
